@@ -1,0 +1,210 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Decision tree
+```{r}
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(GGally)
+library(rpart)
+library(rpart.plot)
+library(modelr)
+library(caret)
+library(tsibble)
+library(ranger)
+```
+
+
+# call data
+```{r}
+flights_joined <- read_csv(here::here("clean_data/flights_joined.csv")) %>% 
+  clean_names() 
+```
+```{r}
+flights_joined <- flights_joined %>% 
+  filter(origin == "EWR") %>% 
+  select(dep_delay, wind_dir, wind_speed, wind_gust, visib)  
+```
+
+```{r}
+flights_joined <- flights_joined %>% 
+  filter(origin == "EWR") %>% 
+   # select(dep_delay, wind_dir, wind_speed, wind_gust, visib) 
+  select(dep_delay, c(temp:visib)) %>% 
+  select(-wind_gust, -dewp)
+```
+
+
+# Correlation between weather variables
+```{r}
+flights_joined %>% 
+  ggcorr(label = TRUE)
+```
+Temp and dewp has a strong correlation, and dewp has a strong correlation with
+humid. Will be removed dewp variable.
+
+Wind speed and wind gust has a perfect correlation. Will be removed the wind gust.
+
+
+## clean data
+```{r}
+tree_weather <- flights_joined %>% 
+  mutate(dep_delay = as.factor(if_else(condition = dep_delay <= 0,
+                                       true = "OnTime",
+                                       false = "Delay"))) %>% 
+  drop_na()
+
+
+  # mutate(month = month(time_hour),
+  #        week   = week(time_hour)) %>%
+  # group_by(month, week) %>%
+  # mutate(across(where(is.numeric), ~ coalesce(.x, mean(.x, na.rm = TRUE)))) %>%
+  # ungroup() %>%
+  # drop_na() %>% 
+  # select(-time_hour,- month, -week)
+
+
+# tree_weather %>% 
+#   distinct(visib)
+
+```
+
+```{r}
+tree_weather <- flights_joined %>% 
+  filter(origin == "EWR") %>% 
+  select(-time_hour, -origin) %>% 
+  mutate(dep_delay = as.factor(if_else(condition = dep_delay <= 0,
+                                       true = "OnTime",
+                                       false = "Delay"))) %>%
+  # mutate(month = month(time_hour),
+  #         week   = week(time_hour)) %>%
+  # #  group_by(month, week) %>%
+  # mutate(across(where(is.numeric), ~ coalesce(.x, median(.x, na.rm = TRUE)))) %>%
+  # 
+  # ungroup() %>%
+  drop_na()
+# select(-time_hour,- month, -week)
+```
+
+
+## test/ train & check balanced
+```{r}
+# ------------------------------------
+# Testing and training dataset
+# ------------------------------------
+n_data <- nrow(tree_weather)
+
+# create a test sample index
+test_index <- sample(1:n_data, size = n_data*0.2)
+
+# create test set
+tree_weather_test  <- slice(tree_weather, test_index)
+
+# create training set
+tree_weather_train <- slice(tree_weather, -test_index)
+
+
+# ------------------------------------
+# check balanced sets
+# ------------------------------------
+tibble(
+  tree_weather_test %>%
+    janitor::tabyl(dep_delay)
+  )
+
+
+tibble(
+  tree_weather_train %>%
+    janitor::tabyl(dep_delay)
+  )
+
+
+# ------------------------------------
+# Create a decision tree
+# ------------------------------------
+tree_weather_fit <- rpart(
+  formula = dep_delay ~ ., 
+  data = tree_weather_train, 
+  method = 'class'
+)
+
+rpart.plot(tree_weather_fit, 
+           yesno = 2, 
+           fallen.leaves = TRUE, 
+           faclen = 6, 
+           digits = 4)
+```
+
+
+```{r}
+rpart.rules(tree_weather_fit, cover = TRUE)
+```
+
+
+
+```{r}
+# ------------------------------------
+# add the predictions
+# ------------------------------------
+tree_test_pred <- tree_weather_test %>%
+  add_predictions(tree_weather_fit, type = 'class') %>% 
+  relocate(pred, .after = dep_delay)
+
+tree_test_pred
+```
+
+## confusion matrix
+```{r}
+
+
+confusionMatrix(
+  tree_test_pred$pred, 
+  tree_test_pred$dep_delay
+  )
+```
+The main diagonal represents correctly-predicted values, with the top right 
+values showing false positives and the bottom left being false negatives. 
+
+The more accurate the decision tree, the higher the main diagonal values will be. 
+
+Accuracy represents the probability of our prediction being correct.
+
+
+# Random florest 
+```{r}
+rf_classifier <- ranger(dep_delay ~ ., 
+                        data = tree_weather_train, 
+                        importance = "impurity", 
+                        num.trees = 1000, 
+                        mtry = 2, 
+                        min.node.size = 5)
+
+rf_classifier
+
+
+# ------------------------------
+# Importance
+# -----------------------------
+importance(rf_classifier)
+```
+
+
+
+```{r}
+# ----------------------------
+# add predictors
+# ----------------------------
+rf_test_pred <- tree_weather_test %>%
+  mutate(pred = predict(rf_classifier, data = tree_weather_test)$predictions, 
+         .after = "dep_delay")
+
+rf_test_pred
+```
+
+```{r}
+confusionMatrix(rf_test_pred$pred, rf_test_pred$dep_delay)
+```
+

@@ -1,0 +1,790 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# call library
+```{r}
+library(tidyverse)
+library(janitor)
+library(ggplot2)
+library(GGally)
+library(lubridate)
+library(ggwordcloud)
+```
+
+
+# read data 
+```{r}
+flights  <- clean_names(read_csv(here::here("raw_data/flights.csv")))
+airlines <- clean_names(read_csv(here::here("raw_data/airlines.csv")))
+airports <- clean_names(read_csv(here::here("raw_data/airports.csv")))
+planes   <- clean_names(read_csv(here::here("raw_data/planes.csv")))
+weather  <- clean_names(read_csv(here::here("raw_data/weather.csv")))
+```
+
+
+# explore data
+```{r}
+glimpse(flights)
+summary(flights)
+
+glimpse(airports)
+summary(airports)
+
+glimpse(airlines)
+summary(airlines)
+
+glimpse(planes)
+summary(planes)
+
+glimpse(weather)
+summary(weather)
+```
+
+# Count NA
+```{r}
+flights %>% 
+  summarise(across(.fns = ~sum(is.na(.x))))
+
+weather %>% 
+  summarise(across(.fns = ~sum(is.na(.x))))
+
+airlines %>% 
+  summarise(across(.fns = ~sum(is.na(.x))))
+
+planes %>% 
+  summarise(across(.fns = ~sum(is.na(.x))))
+
+airports %>% 
+  summarise(across(.fns = ~sum(is.na(.x))))
+```
+
+# flights (dep_delay) - outliers exploratory
+```{r}
+# -----------------------------------
+# Histogram
+# -----------------------------------
+flights %>% 
+  ggplot() +
+  aes(x = dep_delay) +
+  geom_histogram(bins = 30, color = "white", fill = "firebrick") +
+  labs(title = "Distribution of departure delay") +
+  # facet_wrap(~weather_condition, scales = "free", ncol = 3) +
+  theme_minimal() +
+  theme(strip.background = element_rect(fill = "grey80", colour = "white"),
+        strip.text     = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+
+# -----------------------------------
+# Boxplot
+# -----------------------------------
+flights %>% 
+  ggplot() +
+  aes(x = dep_delay, y = 1) + 
+  geom_boxplot(outlier.colour = NA) +
+  geom_point(position = position_jitter(height = .2), color = 4, alpha = .3) +
+  # facet_wrap(~ weather_condition, nrow = 4, scales = "free") +
+  labs(title = "Distribution of departure delay",
+       subtitle = "minutes",
+       x = NULL,
+       y = NULL) +
+  scale_x_continuous(breaks = seq(-120, 1548, 120), limits = c(-120, 1600)) + 
+  theme_minimal() +
+  theme(strip.background = element_rect(fill = "grey80", colour = "white"),
+        strip.text       = element_text(face = "bold"),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank())
+
+```
+
+
+```{r}
+flights %>% 
+  ggplot() +
+  aes(x = dep_delay) +
+  geom_histogram(bins = 30, color = "white", fill = "firebrick") +
+  labs(title = "Distribution of departure delay") +
+  # facet_wrap(~weather_condition, scales = "free", ncol = 3) +
+  theme_minimal() +
+  theme(strip.background = element_rect(fill = "grey80", colour = "white"),
+        strip.text     = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+
+# weather - outliers exploratory
+```{r}
+weather %>% 
+  pivot_longer(cols = c(6:14),
+               names_to = "weather_condition",
+               values_to = "value") %>% 
+  group_by(weather_condition) %>% 
+  ggplot() +
+  aes(x = value) +
+  geom_histogram(bins = 30, color = "white", fill = "firebrick") +
+  facet_wrap(~weather_condition, scales = "free", ncol = 3) +
+  labs(title = "Distibution weather condition",
+       x = NULL) +
+  theme_minimal() +
+  theme(strip.background = element_rect(fill = "grey80", colour = "white"),
+        strip.text     = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+#join flights & weather & airlines & airports
+```{r}
+
+# -----------------------------------------------------------------------
+# create a single key to join flighst and weather
+# -----------------------------------------------------------------------
+flights_key <- flights %>% 
+  mutate(key = str_c(time_hour, origin, sep = ""))
+
+weather_key <- weather %>% 
+  mutate(key = str_c(time_hour, origin, sep = "")) 
+
+
+# -----------------------------------------------------------------------
+# Join 
+# flights & weather & airlines & airports
+# -----------------------------------------------------------------------
+# flights_no_planes <- 
+#   left_join(x = flights_key,
+#              y = weather_key,
+#              suffix = c("", "_weather"), #reduce
+#              by = "key") %>% 
+#   left_join(x = .,
+#              y = airlines,
+#              suffix = c("", "_airline"),   # same
+#              by = "carrier") %>% 
+#   left_join(x = .,
+#              y =  airports,
+#              suffix = c("", "_airport"),  # same
+#              by = c("origin" = "faa"))
+
+
+# -----------------------------------------------------------------------
+# Join 
+# flights & weather & airlines & airports & planes
+# -----------------------------------------------------------------------
+flights_all <- 
+  left_join(x = flights_key,
+             y = weather_key,
+             suffix = c("", "_weather"), #reduce
+             by = "key") %>% 
+  left_join(x = .,
+             y = airlines,
+             suffix = c("", "_airline"),   # same
+             by = "carrier") %>% 
+  left_join(x = .,
+             y =  airports,
+             suffix = c("", "_airport"),  # same
+             by = c("origin" = "faa")) %>% 
+  left_join(x = .,
+             y = planes,
+             suffix = c("", "_plane"),    #reduce
+             by = "tailnum")
+
+
+# -----------------------------------------------------------------------
+# remove datasets created with a unique key to join flighst and weather
+# -----------------------------------------------------------------------
+rm(flights_key, weather_key)
+```
+
+
+```{r}
+flights_all <- flights_all %>% 
+    select(-ends_with("_weather"), -key) %>% 
+  rename(name_airline = name)
+
+```
+
+
+* splitting datasets into numeric and non-numeric columns might help `ggpairs()` 
+run in manageable time, although you will need to add either a `price` or `resid`
+column to the non-numeric dataframe in order to see its correlations with the
+non-numeric predictors. You can do it in the following way:
+```{r}
+flights_all_numeric <- flights_all %>%
+  select_if(is.numeric)
+
+flights_all_nonnumeric <- flights_all %>%
+  select_if(function(x) !is.numeric(x))
+
+flights_all_nonnumeric$dep_delay <- flights_all$dep_delay
+
+
+flights_all_numeric
+flights_all_nonnumeric
+
+```
+
+```{r}
+flights_all_nonnumeric %>% 
+  select(-tailnum, -dest, -manufacturer, -model) %>% 
+  ggpairs(aes(color = type))
+```
+
+
+
+# weather condictions vector
+```{r}
+weather_variables <- c("temp", "dewp", "humid", "precip", "visib", 
+                       "wind_speed", "wind_dir", "wind_gust", "pressure")
+```
+
+## scatterplot weather - drop na
+```{r}
+# --------------------------------------------------
+# function
+# ------------------------------------------------
+scatter_weather_drop_na <- function(dataset, airport_origin, weather_var){
+  dataset %>% 
+    filter(origin == airport_origin) %>% 
+    pivot_longer(cols = c(temp:visib),
+                 names_to = "weather_condition",
+                 values_to = "value") %>% 
+    select(dep_delay, weather_condition, value) %>% 
+    filter(weather_condition == weather_var) %>%
+    ggplot(aes(x = value, y = dep_delay)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = str_c("Relationship: dep_delay VS ", weather_var, sep = ""),
+         y = "dep_delay",
+         x = weather_var) +
+    theme_minimal() +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank())
+}
+
+
+for (condition in weather_variables){
+  print(
+    scatter_weather_drop_na(
+      dataset = flights_no_planes, 
+                airport_origin = "EWR", 
+                 weather_var = condition)
+    )
+}
+```
+
+
+```{r}
+# --------------------------------------------------
+# function
+# ------------------------------------------------
+scatter_weather_drop_na <- function(dataset, airport_origin, weather_var){
+  
+  setup <- dataset %>% 
+    filter(origin == airport_origin) %>% 
+    pivot_longer(cols = c(temp:visib),
+                 names_to = "weather_condition",
+                 values_to = "value") %>% 
+    select(dep_delay, weather_condition, value) %>% 
+    filter(weather_condition == weather_var)
+  
+  max_dep_delay <- setup %>% 
+    drop_na() %>% 
+    summarise(max_dep_delay = max(dep_delay, na.rm = TRUE)) %>% 
+    pull()
+
+    
+  setup %>% 
+    ggplot(aes(x = value, y = dep_delay)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = str_c("Relationship: dep_delay VS ", weather_var, sep = ""),
+         y = "dep_delay",
+         x = weather_var) +
+    ylim(0, max_dep_delay) +
+    scale_y_continuous(breaks = seq(0, max_dep_delay, 100)) +
+    theme_minimal() +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank())
+}
+
+
+for (condition in weather_variables){
+  print(
+    scatter_weather_drop_na(
+      dataset = flights_no_planes, 
+                airport_origin = "EWR", 
+                 weather_var = condition)
+    )
+}
+```
+
+
+## scatterplot weather - impute na
+```{r}
+# --------------------------------------------------
+# function
+# ------------------------------------------------
+scatter_weather_impute_na <- function(dataset, airport_origin, weather_var){
+  dataset %>% 
+    filter(origin == airport_origin) %>% 
+    pivot_longer(cols = c(temp:visib),
+                 names_to = "weather_condition",
+                 values_to = "value") %>% 
+    select(time_hour, dep_delay, weather_condition, value) %>% 
+    filter(weather_condition == weather_var) %>%
+    mutate(month = month(time_hour),
+           week  = week(time_hour),
+           day   = day(time_hour)) %>% 
+    group_by(month, week, day) %>% 
+    mutate(value = coalesce(value, median(value, na.rm = TRUE))) %>% 
+    ungroup() %>% 
+    ggplot(aes(x = value, y = dep_delay)) +
+    geom_point() +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(title = str_c("Relationship: dep_delay VS ", weather_var, sep = ""),
+         y = "dep_delay",
+         x = weather_var) +
+    theme_minimal() +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank())
+}
+
+
+
+
+for (condition in weather_variables){
+  print(
+    scatter_weather_impute_na(
+      dataset        = flights_no_planes, 
+      airport_origin = "EWR", 
+      weather_var    = condition)
+  )
+}
+
+
+
+```
+
+
+
+
+
+
+```{r}
+library(modelr)
+library(broom)
+
+
+flights_weather_na <- flights_weather_airlines %>%
+  select(dep_delay, c("temp": "visib")) %>% 
+  drop_na() 
+
+model <- lm(formula = dep_delay ~ wind_dir + visib, 
+            data    = flights_weather_na)
+
+
+summary(model)
+
+
+tidy_output <- tidy(model)
+tidy_output
+
+tidy_glance <- glance(model)
+tidy_glance
+
+library(GGally)
+
+ggpairs(flights_weather_na)
+
+```
+
+
+
+```{r}
+flights_no_planes %>% 
+  select(c(temp:visib)) %>% 
+    skimr::skim()
+```
+
+```{r}
+# A futher understanding of bloxplot teel us in number.
+bloxpot_summary <- flights_no_planes %>% 
+   pivot_longer(cols = c(temp:visib),
+                 names_to = "weather_condition",
+                 values_to = "value") %>% 
+  group_by(weather_condition) %>% 
+  summarise(
+    min_value = round(min(value, na.rm = TRUE), digits = 2),
+    max_value = round(max(value, na.rm = TRUE), digits = 2),
+    #Q1: the value splitting the distribution into a lower 25% and higher 75%.
+    #Q2: the value splitting the distribution into a lower 50% and higher 50%.
+    #Q3: the value splitting the distribution into a lower 75% and higher 25%.
+    #IRQ: Interquartile range is the range in which 50% of the values fall
+    Q1        = round(quantile(value, 0.25, na.rm = TRUE), digits = 2),
+    Q2_median = round(quantile(value, 0.5,  na.rm = TRUE), digits = 2),
+    Q3        = round(quantile(value, 0.75, na.rm = TRUE), digits = 2),
+    IRQ       = Q3 - Q1,  #or IRQ = IRQ(bill_length_mm)
+    
+    lower_whisker = round(Q1 - 1.5 * IRQ, digits = 2),
+    upper_whisker = round(Q3 + 1.5 * IRQ, digits = 2),
+
+    
+    # how many values are beyond upper and lower whisker - potential outliers
+    nr_outlier_upper  = sum(value > upper_whisker, na.rm = TRUE),
+    nr_outlier_lower  = sum(value < lower_whisker, na.rm = TRUE)
+    )
+
+bloxpot_summary 
+  
+```
+
+
+
+# Hypothesis test - time average of departure delay between NY airports
+```{r}
+library(infer)
+```
+
+## HypotHesis test: EWR & LGA
+
+**H0:** The time average of departure delay of Newark airport is the same of the La Guardian airport.
+$$
+H_0: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} - \mu_{\ Guardian \ aiport \ time \ avg \ departure \ delay} = 0
+$$ 
+
+**H1:** The time average of departure delay of Newark airport is higher than the La Guardian airport.
+$$
+H_1: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} -\mu_{\ Guardian \ aiport \ time \ avg \ departure \ delay} > 0
+$$
+
+
+
+```{r}
+# ----------------------------------------------------------------------------
+# decide significance level (a)
+# ----------------------------------------------------------------------------
+a <- 0.05
+
+
+# ----------------------------------------------------------------------------
+# null sample distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_LGA <- flights %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "LGA")) %>%
+  specify(dep_delay ~ origin) %>% #(response = dep_delay, explanatory = origin)
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "diff in means", order = c("EWR", "LGA"))
+
+# ----------------------------------------------------------------------------
+# Calculate observed statistic
+# ----------------------------------------------------------------------------
+obs_statistic_EWR_LGA <- flights %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "LGA")) %>%
+  specify(dep_delay ~ origin) %>%
+  calculate(stat = "diff in means", order = c("EWR", "LGA"))
+obs_statistic_EWR_LGA
+
+# ----------------------------------------------------------------------------
+# Calculate p-value
+# ----------------------------------------------------------------------------
+null_distribution_EWR_LGA %>%
+  get_p_value(direction = "right", obs_stat = obs_statistic_EWR_LGA)
+
+# ----------------------------------------------------------------------------
+# Visualize the p-value on the null distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_LGA %>%
+  visualise() +
+  shade_p_value(direction = "left", obs_stat = obs_statistic_EWR_LGA) + 
+  theme_minimal() +
+  labs(title = "Visualize the p-value on the null distribution") +
+  scale_x_continuous(breaks = seq(-3, 10, 1)) +
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+
+## HypotHesis test: EWR & JFK
+
+
+**H0:** The time average of departure delay of Newark airport is the same of the John F Kennedy International Airport.
+$$
+H_0: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} - \mu_{\ Jonh.F \ Kennedy \  aiport \ time \ avg \ departure \ delay} = 0
+$$ 
+
+**H1:** The time average of departure delay of Newark airport is higher than the John F Kennedy International Airport.
+$$
+H_1: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} -\mu_{\ Jonh.F \ Kennedy \  aiport \ time \ avg \ departure \ delay} > 0
+$$
+
+```{r}
+# ----------------------------------------------------------------------------
+# decide significance level (a)
+# ----------------------------------------------------------------------------
+a <- 0.05
+
+# ----------------------------------------------------------------------------
+# null sample distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_JFK <- flights %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "JFK")) %>%
+  specify(dep_delay ~ origin) %>% #(response = dep_delay, explanatory = origin)
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "diff in means", order = c("EWR", "JFK"))
+
+# ----------------------------------------------------------------------------
+# Calculate observed statistic
+# ----------------------------------------------------------------------------
+obs_statistic_EWR_JFK <- flights %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "JFK")) %>%
+  specify(dep_delay ~ origin) %>%
+  calculate(stat = "diff in means", order = c("EWR", "JFK"))
+obs_statistic_EWR_JFK 
+
+# ----------------------------------------------------------------------------
+# Calculate p-value
+# ----------------------------------------------------------------------------
+null_distribution_EWR_JFK %>%
+  get_p_value(direction = "right", obs_stat = obs_statistic_EWR_JFK)
+
+# ----------------------------------------------------------------------------
+# Visualize the p-value on the null distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_JFK %>%
+  visualise() +
+  shade_p_value(direction = "left", obs_stat = obs_statistic_EWR_JFK) + 
+  theme_minimal() +
+  labs(title = "Visualize the p-value on the null distribution") +
+  scale_x_continuous(breaks = seq(-3, 10, 1)) +
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+
+# Decision tree
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+
+## clean data
+```{r}
+tree <- flights_no_planes %>% 
+  filter(origin == "EWR") %>% 
+  select(time_hour, dep_delay, c(temp:visib)) %>% 
+  mutate(dep_delay = factor(if_else(condition = dep_delay <= 0,
+                             true = "OnTime",
+                             false = "Delay"))) %>%
+  # drop_na()
+  mutate(month = month(time_hour),
+         day   = day(time_hour)) %>%
+  group_by(month, day) %>%
+  mutate(across(where(is.numeric), ~ coalesce(.x, median(.x, na.rm = TRUE)))) %>%
+  ungroup() %>%
+  drop_na() %>%
+  select(-time_hour,- month, - day)
+
+
+tree %>% 
+  ggcorr(label = TRUE)
+
+tree %>% 
+  select(-dewp) %>% 
+    ggcorr(label = TRUE)
+
+tree %>% 
+  select(-dewp, - wind_gust, - wind_speed) %>% 
+    ggcorr(label = TRUE)
+
+tree_new <- tree %>% 
+  select(-dewp, - wind_gust, - wind_speed)
+```
+
+## clean
+```{r}
+
+```
+
+
+```{r}
+
+tree_weather <- function(dataset, weather_var){
+  dataset %>% 
+    pivot_longer(cols = -dep_delay,
+                 names_to = "weather_condition",
+                 values_to = "value") %>% 
+    filter(weather_condition == weather_var) %>% 
+    ggplot() +
+    aes(x = dep_delay, y = value, fill = dep_delay) +
+    geom_col() +
+    theme_minimal() +
+    scale_fill_manual(values = c("Delay" = "firebrick3",
+                      "OnTime" = "seagreen")) +
+    theme(legend.title = element_blank(),
+          legend.position = "bottom",
+          panel.grid.major.x = element_blank()) +
+    labs(title = str_c("Departure delay  VS ", weather_var, sep = ""),
+      x = NULL, 
+         y = NULL)
+  }
+
+for (n in weather_variables){
+  print(
+    tree_weather(dataset = tree_new,
+                 weather_var = n)
+  )
+}
+
+
+
+
+```
+
+
+
+
+
+
+## test/ train & check balanced
+```{r}
+# ------------------------------------
+# Testing and training dataset
+# ------------------------------------
+n_data <- nrow(tree_new)
+
+# create a test sample index
+test_index <- sample(1:n_data, size = n_data*0.2)
+
+# create test set
+tree_test  <- slice(tree_new, test_index)
+
+# create training set
+tree_train <- slice(tree_new, -test_index)
+
+
+# ------------------------------------
+# check balanced sets
+# ------------------------------------
+tibble(
+  tree_test %>%
+    janitor::tabyl(dep_delay)
+  )
+
+
+tibble(
+  tree_train %>%
+    janitor::tabyl(dep_delay)
+  )
+
+```
+
+
+## decision tree
+```{r}
+# ------------------------------------
+# Create a decision tree
+# ------------------------------------
+tree_fit <- rpart(
+  formula = dep_delay ~ ., 
+  data = tree_train, 
+  method = 'class'
+)
+
+rpart.plot(tree_fit, 
+           yesno = 2, 
+           fallen.leaves = TRUE, 
+           faclen = 6, 
+           digits = 4)
+
+
+# tree %>% 
+#   ggpairs()
+# 
+# tree %>%
+#   ggcorr(label = TRUE)
+```
+The largest group in the data (14.45 %) comprises humid above 83.16 and temperature below 48.45 F with a probability of departure delay of 41.87 %.
+
+
+
+adult, male, lower and middle class passengers with a probability of survival of 0.11
+The next largest group (22%) comprises female middle and upper class passengers, with a probability of survival of 0.94
+
+
+
+
+
+
+```{r}
+rpart.rules(tree_fit, cover = TRUE)
+```
+
+
+## add predictors
+```{r}
+library(modelr)
+```
+
+```{r}
+# ------------------------------------
+# add the predictions
+# ------------------------------------
+tree_test_pred <- tree_test %>%
+  add_predictions(tree_fit, type = 'class') %>% 
+  relocate(pred, .after = dep_delay)
+
+tree_test_pred
+```
+
+## confusion matrix
+```{r}
+library(caret)
+
+confusionMatrix(
+  tree_test_pred$pred, 
+  tree_test_pred$dep_delay
+  )
+```
+
+
+# Thank you
+```{r}
+n_colleagues <- 60
+n_instructors <- 60
+
+thank_you <- 
+  tibble(word = c(rep(x = c("Thank you"), times = 140),
+                  rep(x = c("Ross"), times = n_colleagues),
+                  rep(x = c("Chris"), times = n_colleagues),
+                  rep(x = c("Kate"), times = n_colleagues),
+                  rep(x = c("Neringa"), times = n_instructors),
+                  rep(x = c("David"), times = n_instructors),
+                  rep(x = c("Jamie"), times = n_instructors),
+                  rep(x = c("Jonh"), times = n_instructors),
+                  rep(x = c("Colin"), times = n_instructors),
+                  rep(x = c("Codeclan"), times = n_instructors),
+                  rep(x = c("DE15"), times = 40))
+         ) %>% 
+  group_by(word) %>% 
+  summarise(n = n())
+
+
+ggwordcloud(
+  words = thank_you$word,
+  freq = thank_you$n,
+  scale = c(6, 1),
+  min.freq = 10,
+  random.order = FALSE,
+  random.color = TRUE,
+  colors = c("steelblue", "seagreen","firebrick", "#D29F00"))
+```
+

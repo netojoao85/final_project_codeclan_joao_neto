@@ -1,0 +1,84 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(modelr)
+library(GGally)
+library(ggfortify) #autoplot
+```
+
+```{r}
+flights_joined <- read_csv(here::here("clean_data/flights_joined.csv")) %>% 
+  clean_names()
+```
+
+
+```{r}
+flights_numeric <- flights_joined %>%
+  select_if(is.numeric)
+
+flights_no_nnumeric <- flights_joined %>%
+  select_if(function(x) !is.numeric(x))
+
+flights_no_nnumeric$dep_delay <- flights_joined$dep_delay
+
+
+flights_numeric
+flights_no_nnumeric
+```
+
+```{r}
+flights_numeric %>% 
+  select(dep_time:distance) %>% 
+  ggcorr(label = TRUE)
+```
+```{r}
+flights_joined %>%
+  ggplot(aes(x = arr_delay, y = dep_delay)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(
+    x = "arrival delays",
+    y = "departure delays"
+  )
+```
+
+```{r}
+flights_joined %>%
+  ggplot(aes(x = dep_delay)) +
+  geom_histogram()
+```
+```{r}
+model1 <- lm(formula = dep_delay ~ arr_delay,
+            data = flights_joined)
+
+summary(model)
+```
+
+
+```{r}
+model <- lm(formula = dep_delay ~ arr_delay,
+            data = flights_joined)
+
+summary(model)
+```
+
+# r^2 is ok. 88,5% of variations in departure delay is predict from arrive delay.
+#  a very small arrive delay p-value, is significant for both signifincat levels, 0.01 and 0.05
+# for each minute of arrive deelay increase, the departure delay will increase 0.88.
+
+```{r}
+autoplot(model)
+```
+
+
+$$\widehat{\textrm{y}} = \textrm{intercept} + b_{\textrm{ arrival delays}} \times \textrm{arrival delays} 
+$$

@@ -1,0 +1,152 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(infer)
+```
+
+# call data
+```{r}
+flights_joined <- read_csv(here::here("clean_data/flights_joined.csv")) %>% 
+  clean_names()
+```
+
+
+# HypotHesis test: EWR & LGA
+
+**H0:** The time average of departure delay of Newark airport is the same of the La Guardian airport.
+$$
+H_0: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} - \mu_{\ Guardian \ aiport \ time \ avg \ departure \ delay} = 0
+$$ 
+
+**H1:** The time average of departure delay of Newark airport is higher than the La Guardian airport.
+$$
+H_1: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} -\mu_{\ Guardian \ aiport \ time \ avg \ departure \ delay} < 0
+$$
+
+
+```{r}
+# ----------------------------------------------------------------------------
+# decide significance level (a)
+# ----------------------------------------------------------------------------
+a <- 0.05
+
+
+# ----------------------------------------------------------------------------
+# null sample distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_LGA <- flights_joined %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "LGA")) %>%
+  specify(dep_delay ~ origin) %>% #(response = dep_delay, explanatory = origin)
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "diff in means", order = c("EWR", "LGA"))
+
+# ----------------------------------------------------------------------------
+# Calculate observed statistic
+# ----------------------------------------------------------------------------
+obs_statistic_EWR_LGA <- flights_joined %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "LGA")) %>%
+  specify(dep_delay ~ origin) %>%
+  calculate(stat = "diff in means", order = c("EWR", "LGA"))
+obs_statistic_EWR_LGA
+
+# ----------------------------------------------------------------------------
+# Calculate p-value
+# ----------------------------------------------------------------------------
+null_distribution_EWR_LGA %>%
+  get_p_value(direction = "right", obs_stat = obs_statistic_EWR_LGA)
+
+# ----------------------------------------------------------------------------
+# Visualize the p-value on the null distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_LGA %>%
+  visualise() +
+  shade_p_value(direction = "right", obs_stat = obs_statistic_EWR_LGA) + 
+  theme_minimal() +
+  labs(title = "Visualize the p-value on the null distribution") +
+  scale_x_continuous(breaks = seq(-3, 10, 1)) +
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+##conclusion
+The p-value is lower than the significance level (0.05), so there is strong 
+evidence to not reject H0 in favour of H1 and conclude that the time average of 
+delay of departure in Newark airport is not higher than the La Guardian airport.
+
+There are 5% of probability to reject the hypothesis that the difference of 
+the means of the time of departure delay is the same in both airports, being
+this hypothesis true.
+
+
+
+
+# HypotHesis test: EWR & JFK
+
+
+**H0:** The time average of departure delay of Newark airport is the same of the John F Kennedy International Airport.
+$$
+H_0: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} - \mu_{\ Jonh.F \ Kennedy \  aiport \ time \ avg \ departure \ delay} = 0
+$$ 
+
+**H1:** The time average of departure delay of Newark airport is higher than the John F Kennedy International Airport.
+$$
+H_1: \mu_{\ Newark \ aiport \ time \ avg \ departure \ delay} -\mu_{\ Jonh.F \ Kennedy \  aiport \ time \ avg \ departure \ delay} > 0
+$$
+
+```{r}
+# ----------------------------------------------------------------------------
+# decide significance level (a)
+# ----------------------------------------------------------------------------
+a <- 0.05
+
+# ----------------------------------------------------------------------------
+# null sample distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_JFK <- flights_joined %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "JFK")) %>%
+  specify(dep_delay ~ origin) %>% #(response = dep_delay, explanatory = origin)
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "diff in means", order = c("EWR", "JFK"))
+
+# ----------------------------------------------------------------------------
+# Calculate observed statistic
+# ----------------------------------------------------------------------------
+obs_statistic_EWR_JFK <- flights_joined %>%
+  filter(dep_delay > 0) %>% 
+  filter(origin %in% c("EWR", "JFK")) %>%
+  specify(dep_delay ~ origin) %>%
+  calculate(stat = "diff in means", order = c("EWR", "JFK"))
+obs_statistic_EWR_JFK 
+
+# ----------------------------------------------------------------------------
+# Calculate p-value
+# ----------------------------------------------------------------------------
+null_distribution_EWR_JFK %>%
+  get_p_value(direction = "right", obs_stat = obs_statistic_EWR_JFK)
+
+# ----------------------------------------------------------------------------
+# Visualize the p-value on the null distribution
+# ----------------------------------------------------------------------------
+null_distribution_EWR_JFK %>%
+  visualise() +
+  shade_p_value(direction = "right", obs_stat = obs_statistic_EWR_JFK) + 
+  theme_minimal() +
+  labs(title = "Visualize the p-value on the null distribution") +
+  scale_x_continuous(breaks = seq(-3, 10, 1)) +
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+##conclusion
+p-value is is greater than the significance level (0.05), then we lack sufficient
+evidence to reject H0 and so we fail to reject H0. Based on our sample, we do
+not have enough evidence that the time average of departure delay in Newark 
+Airport is higher than in the John F Kennedy International Airport.

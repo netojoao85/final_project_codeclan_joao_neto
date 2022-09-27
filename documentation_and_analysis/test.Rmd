@@ -1,0 +1,93 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+```
+
+
+# call data
+```{r}
+flights_joined <- read_csv(here::here("clean_data/flights_joined.csv")) %>% 
+  clean_names()
+```
+
+```{r}
+
+# air_time and distance have a perfect relationship -> air_time will be removed
+# 
+# engines and speed have a strong correlation (r = .7)
+# engines and speed have a strong correlation (r = .7) -> speed will be removed
+
+flights_joined %>% 
+  select(-lat, -lon, -alt, -tz, -dst, -tzone) %>% 
+  select(hour, dep_delay) %>% 
+  GGally::ggcorr(label = TRUE)
+
+```
+
+```{r}
+flights_numeric <- flights_joined %>%
+  select_if(is.numeric)
+
+flights_no_nnumeric <- flights_joined %>%
+  select_if(function(x) !is.numeric(x))
+
+flights_no_nnumeric$dep_delay <- flights_joined$dep_delay
+
+
+flights_numeric
+flights_nonnumeric
+```
+
+```{r}
+flights_joined %>% 
+  filter(origin == "EWR") %>% 
+  select(-c("lat":"tzone")) %>%   # airport dataset
+  select(-hour, -minute) %>%      # weather dataset
+  # select() %>%                  # planes dataset
+  select(-air_time, -sched_dep_time) %>%                   # flights
+  
+  
+  select(-air_time, -engines, -speed, -seats, -lat, -lon, -alt, -tz, -dst, -tzone) %>% 
+  mutate(engine = as.factor(engine),
+         name_airline = as.factor(name_airline)) %>% 
+  
+  flights_joined %>% 
+  distinct(manufacturer)
+type ok 5 levels
+engine ok 9 levels
+  
+  
+  summarise(across(.fns = ~sum(is.na(.x))))
+```
+
+```{r}
+ee <- flights %>% 
+  select(dep_delay, arr_delay)
+
+
+%>% 
+  ggplot(aes(x = arr_delay, y = dep_delay)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+
+
+model <- lm(formula = dep_delay ~ .,
+   data = ee)
+
+summary(model)
+```
+
+```{r}
+
+  
+flights_nonnumeric %>% 
+  select(-tailnum, -dest, - manufacturer, -model) %>% 
+  ggpairs()
+```
+
