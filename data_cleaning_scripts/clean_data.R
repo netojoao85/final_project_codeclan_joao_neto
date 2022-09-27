@@ -1,8 +1,12 @@
+###########################################################################
+#  Main aim is join all datasets in just one. At the end will be saved a  #
+#  csv file that will be used for further analysis.                       #
+###########################################################################
+
 # call libraries ----------------------------------------------------------
 library(tidyverse)
 library(janitor)
 library(tsibble)
-
 
 
 # read data ---------------------------------------------------------------
@@ -88,7 +92,6 @@ na_summary <- tibble(
   flights_joined %>% 
     summarise(across(.fns = ~sum(is.na(.x))))
 )
-
 
 
 # some clean/organize dataset ----------------------------------------------
