@@ -56,6 +56,14 @@ flights_joined %>%
 ```
 
 # 4 - weather variables
+```{r}
+flights_joined_weather_longer <- flights_joined %>% 
+  pivot_longer(cols      = c(18:26),
+               names_to  = "weather_condition",
+               values_to = "value")
+```
+
+
 ## 4.1 - weather variables distribution
 ```{r}
 flights_joined_weather_longer %>% 
@@ -73,12 +81,6 @@ flights_joined_weather_longer %>%
 
 ## 4.2 - weather variables boxplot
 ```{r}
-
-flights_joined_weather_longer <- flights_joined %>% 
-  pivot_longer(cols      = c(18:26),
-               names_to  = "weather_condition",
-               values_to = "value")
-
 func_weather_longer <- function(dataset, 
                                 weather_1, weather_2, weather_3, weather_4){
   
